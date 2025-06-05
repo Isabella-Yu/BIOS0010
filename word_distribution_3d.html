@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Word Distribution in Semantic Space</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #1e3a5f;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        #container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 2px solid white;
+            border-radius: 8px;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+        }
+        .axis-label {
+            position: absolute;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        }
+        .depression-zone {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 100, 100, 0.2);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ff6464;
+            font-size: 12px;
+        }
+        .legend {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            font-size: 11px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        
+        <div class="axis-label" style="bottom: 20px; left: 50%; transform: translateX(-50%);">
+            Internal (+) ← → External (-)
+        </div>
+        <div class="axis-label" style="top: 50%; left: 10px; transform: translateY(-50%) rotate(-90deg);">
+            Stable & Global (+) ← → Unstable & Specific (-)
+        </div>
+        <div class="axis-label" style="top: 10px; right: 10px;">
+            Positive (+) ← → Negative (-) [Emotion]
+        </div>
+        
+        <div class="depression-zone">
+            <strong>Depression-Prone Region:</strong><br>
+            Internal + Stable/Global + Negative
+        </div>
+        
+        <div class="legend">
+            • 15 word positions in semantic space<br>
+            • Interactive: drag to rotate view<br>
+            • Red region indicates depression bias
+        </div>
+    </div>
+
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, 800/600, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(800, 600);
+        renderer.setClearColor(0x1e3a5f, 1);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // Word coordinates (a = 1)
+        const a = 1;
+        const wordPositions = [
+            [0, 0, 0], [0, 2*a, 0], [0, -2*a, 0], [2*a, 0, 0], [-2*a, 0, 0],
+            [a, a, a], [a, -a, a], [-a, -a, a], [-a, a, a], [-a, a, -a],
+            [a, a, -a], [-a, -a, -a], [a, -a, -a], [0, 0, 2*a], [0, 0, -2*a]
+        ];
+
+        // Create axes
+        const axesHelper = new THREE.AxesHelper(3);
+        scene.add(axesHelper);
+
+        // Create grid lines for better spatial understanding
+        const gridHelper = new THREE.GridHelper(6, 6, 0x888888, 0x444444);
+        gridHelper.position.y = 0;
+        scene.add(gridHelper);
+
+        // Create word points
+        const pointGeometry = new THREE.SphereGeometry(0.08, 16, 16);
+        const pointMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+        wordPositions.forEach((pos, index) => {
+            const point = new THREE.Mesh(pointGeometry, pointMaterial);
+            point.position.set(pos[0], pos[1], pos[2]);
+            scene.add(point);
+
+            // Add point labels
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 64;
+            canvas.height = 32;
+            context.fillStyle = 'white';
+            context.font = '16px Arial';
+            context.textAlign = 'center';
+            context.fillText(`W${index + 1}`, 32, 20);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.set(pos[0], pos[1] + 0.2, pos[2]);
+            sprite.scale.set(0.5, 0.25, 1);
+            scene.add(sprite);
+        });
+
+        // Highlight depression-prone region (internal, stable/global, negative)
+        // This would be the +X, +Y, -Z octant
+        const depressionGeometry = new THREE.BoxGeometry(2, 2, 2);
+        const depressionMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xff4444, 
+            transparent: true, 
+            opacity: 0.2,
+            wireframe: false
+        });
+        const depressionBox = new THREE.Mesh(depressionGeometry, depressionMaterial);
+        depressionBox.position.set(1, 1, -1); // Center of the +X, +Y, -Z octant
+        scene.add(depressionBox);
+
+        // Add wireframe to depression box for better visibility
+        const wireframeGeometry = new THREE.BoxGeometry(2, 2, 2);
+        const wireframeMaterial = new THREE.LineBasicMaterial({ color: 0xff6464 });
+        const wireframeBox = new THREE.LineSegments(
+            new THREE.EdgesGeometry(wireframeGeometry), 
+            wireframeMaterial
+        );
+        wireframeBox.position.set(1, 1, -1);
+        scene.add(wireframeBox);
+
+        // Camera position
+        camera.position.set(5, 3, 5);
+        camera.lookAt(0, 0, 0);
+
+        // Mouse controls for rotation
+        let mouseDown = false;
+        let mouseX = 0;
+        let mouseY = 0;
+
+        renderer.domElement.addEventListener('mousedown', (event) => {
+            mouseDown = true;
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        });
+
+        renderer.domElement.addEventListener('mouseup', () => {
+            mouseDown = false;
+        });
+
+        renderer.domElement.addEventListener('mousemove', (event) => {
+            if (!mouseDown) return;
+
+            const deltaX = event.clientX - mouseX;
+            const deltaY = event.clientY - mouseY;
+
+            // Rotate camera around the scene
+            const spherical = new THREE.Spherical();
+            spherical.setFromVector3(camera.position);
+            spherical.theta -= deltaX * 0.01;
+            spherical.phi += deltaY * 0.01;
+            spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+
+            camera.position.setFromSpherical(spherical);
+            camera.lookAt(0, 0, 0);
+
+            mouseX = event.clientX;
+            mouseY = event.clientY;
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Subtle rotation for demonstration
+            if (!mouseDown) {
+                scene.rotation.y += 0.002;
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
